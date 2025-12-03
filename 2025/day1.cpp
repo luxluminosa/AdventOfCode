@@ -1,5 +1,6 @@
 #include <type_traits>
 #include <stdio.h>
+#include <tuple>
 
 template<bool B, int I>
 class Rotation {
@@ -7,6 +8,9 @@ public:
     static constexpr bool right = B;
     static constexpr int amount = I;
 };
+
+#define GOLD_STAR 1
+#if !GOLD_STAR
 
 template<int dial_position, typename = void, typename...>
 consteval int get_password_impl(int zero_count) {
@@ -30,6 +34,68 @@ consteval int get_password_impl(int zero_count, Rotation current, Rotations... e
     }
     return get_password_impl<new_dial_position>(zero_count, extra...);
 }
+
+#else
+
+template<int dial_position, typename = void, typename...>
+consteval int get_password_impl(int zero_count) {
+    return zero_count;
+}
+
+// template<typename Rotation>
+// consteval int update_dial_postion(int current_dial_position, Rotation rotation) {
+//     if constexpr (rotation.right) {
+//         return current_dial_position + rotation.amount;
+//     } else {
+//         return current_dial_position - rotation.amount;
+//     }
+// }
+
+template<typename Rotation>
+consteval std::pair<int, int> update_dial_postion(int current_dial_position, Rotation rotation) {
+    if constexpr (rotation.right) {
+        int new_dial_position = current_dial_position + rotation.amount;
+        if (current_dial_position < 0 && new_dial_position >= 0) {
+            return {new_dial_position, 1};
+        } else {
+            return {new_dial_position, 0};
+        }
+    } else {
+        int new_dial_position = current_dial_position - rotation.amount;
+        if (current_dial_position > 0 && new_dial_position <= 0) {
+            return {new_dial_position, 1};
+        } else {
+            return {new_dial_position, 0};
+        }
+    }
+}
+
+consteval std::pair<int, int> reset_dial_postion(int current_dial_position) {
+    int zero_count = 0;
+    while (current_dial_position >= 100) {
+        ++zero_count;
+        current_dial_position -= 100;
+    }
+    while (current_dial_position <= -100) {
+        ++zero_count;
+        current_dial_position += 100;
+    }
+    return {current_dial_position, zero_count};
+}
+
+template<int dial_position, typename Rotation, typename... Rotations>
+consteval int get_password_impl(int zero_count, Rotation current, Rotations... extra) {
+    constexpr auto pair = update_dial_postion(dial_position, current);
+    constexpr auto pair2 = reset_dial_postion(pair.first);
+
+    constexpr int new_dial_position = pair2.first;
+    zero_count += pair.second;
+    zero_count += pair2.second;
+
+    return get_password_impl<new_dial_position>(zero_count, extra...);
+}
+
+#endif
 
 template<typename... Rotations>
 consteval int get_password(Rotations... r) {
